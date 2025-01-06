@@ -3,7 +3,6 @@ CREATE TABLE vulnerabilities (
     category TEXT,
     name TEXT,
     description TEXT,
-    type TEXT,
     cve TEXT,
     severity TEXT,
     file TEXT,
