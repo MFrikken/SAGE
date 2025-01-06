@@ -53,5 +53,5 @@ fn main() {
     }
 
 
-    println!("{}", file_path);
+    println!("Analyzed file: {}", file_path);
 }

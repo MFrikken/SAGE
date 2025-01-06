@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result, Error, params};
 
 use crate::vulnerability::{Vulnerability, Weakness, Location};
 
-const DATABSE_SCHEMA: &str = include_str!("../database.sql");
+const DATABSE_SCHEMA: &str = include_str!("./resources/database/database.sql");
 
 pub struct DatabaseConnector {
     connection: Connection
