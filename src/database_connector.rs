@@ -1,7 +1,8 @@
 use rusqlite::{Connection, Result, Error, params};
-use std::fs;
 
 use crate::vulnerability::{Vulnerability, Weakness, Location};
+
+const DATABSE_SCHEMA: &str = include_str!("../database.sql");
 
 pub struct DatabaseConnector {
     connection: Connection
@@ -9,27 +10,21 @@ pub struct DatabaseConnector {
 
 impl DatabaseConnector {
 
-    pub fn new(database_scheme_path: &String) -> Self {
-        let connection: Connection = DatabaseConnector::open_connection(&database_scheme_path).unwrap();
+    pub fn new() -> Self {
+        let connection: Connection = DatabaseConnector::open_connection().unwrap();
         DatabaseConnector {
             connection
         }
     }
 
-    pub fn open_connection(database_scheme_path: &String) -> Result<Connection, Error> {
+    pub fn open_connection() -> Result<Connection, Error> {
         match Connection::open_in_memory() {
             Ok(connection) => {
-                let schema = fs::read_to_string(database_scheme_path);
-                if let Ok(schema) = schema {
-                    if let Err(e) = DatabaseConnector::create_database(&connection, &schema) {
-                        println!("Failed to create databse from schema: {:?}", e);
-                        return Err(e);
-                    } 
-                    Ok(connection)
-                } else {
-                    println!("Could not load database schema from: {}", database_scheme_path);
-                    Err(Error::InvalidQuery)
-                }
+                if let Err(e) = DatabaseConnector::create_database(&connection, DATABSE_SCHEMA) {
+                    println!("Failed to create databse from schema: {:?}", e);
+                    return Err(e);
+                } 
+                Ok(connection)
             },
             Err(error) => {
                 println!("Error while connecting to database: {:?}", error);
@@ -38,18 +33,17 @@ impl DatabaseConnector {
         }
     }
     
-    fn create_database(connection: &Connection, schema: &String) -> Result<()>{
+    fn create_database(connection: &Connection, schema: &str) -> Result<()>{
         connection.execute_batch(schema)
     }
     
     pub fn write_vulnerability(&self, vulnerability: &Vulnerability) -> Result<()> {
-        match self.connection.execute("INSERT INTO vulnerabilities (id, category, name, description, type, cve, severity, file, start_line, end_line) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);", 
+        match self.connection.execute("INSERT INTO vulnerabilities (id, category, name, description, cve, severity, file, start_line, end_line) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);", 
         params![
             vulnerability.id,
             vulnerability.category, 
             vulnerability.name,
             vulnerability.description,
-            vulnerability.r#type,
             vulnerability.cve,
             vulnerability.severity,
             vulnerability.location.file,
@@ -57,7 +51,6 @@ impl DatabaseConnector {
             vulnerability.location.end_line
         ]) {
             Ok(_) => {
-                println!("Vulnerability successfully inserted!");
                 Ok(())
             },
             Err(e) => {
@@ -77,7 +70,6 @@ impl DatabaseConnector {
             weakness.url
         ]) {
             Ok(_) => {
-                println!("Weakness successfully inserted!");
                 Ok(())
             },
             Err(e) => {
@@ -95,22 +87,17 @@ impl DatabaseConnector {
                 category: row.get(1)?,
                 name: row.get(2)?,
                 description: row.get(3)?,
-                r#type: row.get(4)?,
-                cve: row.get(5)?,
-                severity: row.get(6)?,
+                cve: row.get(4)?,
+                severity: row.get(5)?,
                 location: Location {
-                    file: row.get(7)?,
-                    start_line: row.get(8)?,
-                    end_line: row.get(9)?,
+                    file: row.get(6)?,
+                    start_line: row.get(7)?,
+                    end_line: row.get(8)?,
                 },
                 weaknesses: Vec::new()
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-
-        for vulnerability in &vulnerabilities {
-            println!("{:?}", vulnerability);
-        }
 
         Ok(vulnerabilities)
     }
