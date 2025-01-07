@@ -1,6 +1,6 @@
 use rusqlite::{Connection, Result, Error, params};
 
-use crate::vulnerability::{Vulnerability, Weakness, Location};
+use crate::vulnerability::{Vulnerability, Weakness, Location, Severity};
 
 const DATABSE_SCHEMA: &str = include_str!("./resources/database/database.sql");
 
@@ -45,7 +45,7 @@ impl DatabaseConnector {
             vulnerability.name,
             vulnerability.description,
             vulnerability.cve,
-            vulnerability.severity,
+            vulnerability.severity.display(),
             vulnerability.location.file,
             vulnerability.location.start_line,
             vulnerability.location.end_line
@@ -88,7 +88,12 @@ impl DatabaseConnector {
                 name: row.get(2)?,
                 description: row.get(3)?,
                 cve: row.get(4)?,
-                severity: row.get(5)?,
+                severity: match row.get::<_, String>(5)?.as_str() {
+                    "Low" => Severity::Low,
+                    "Medium" => Severity::Medium,
+                    "High" => Severity::High,
+                    _ => Severity::Unknown,
+                },
                 location: Location {
                     file: row.get(6)?,
                     start_line: row.get(7)?,
@@ -100,5 +105,21 @@ impl DatabaseConnector {
         .collect::<Result<Vec<_>, _>>()?;
 
         Ok(vulnerabilities)
+    }
+
+    pub fn read_all_weaknesses(&self) -> Result<Vec<Weakness>, Error> {
+        let mut query = self.connection.prepare("SELECT * FROM weaknesses")?;
+        let weaknesses = query.query_map([], |row| {
+            Ok(Weakness {
+                id: row.get(0)?,
+                r#type: row.get(2)?,
+                name: row.get(3)?,
+                value: row.get(4)?,
+                url: row.get(5)?
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(weaknesses)
     }
 }

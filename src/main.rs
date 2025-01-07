@@ -48,9 +48,24 @@ fn main() {
                     println!("Failed to read database entries: {:?}", e)
                 }
             }
+
+            match database_connector.read_all_weaknesses() {
+                Ok(weaknesses) => {
+                    let mut weak_rows: Vec<Vec<String>> = Vec::new();
+                    for weakness in weaknesses {
+                        weak_rows.push(weakness.to_table());
+                    }
+
+                    let _ = pretty_table::write_weaknesses_table(&mut weak_rows);
+                }
+                Err(e) => {
+                    println!("Failed to read database entries: {:?}", e)
+                }
+            }
         }
         Err(error) => println!("{}", error),
     }
+
 
 
     println!("Analyzed file: {}", file_path);
