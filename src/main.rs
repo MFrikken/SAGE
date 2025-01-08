@@ -1,9 +1,9 @@
 pub mod command_line_reader;
+pub mod database_connector;
 pub mod file_reader;
 pub mod json_parser;
-pub mod database_connector;
-pub mod vulnerability;
 pub mod pretty_table;
+pub mod vulnerability;
 
 use command_line_reader::{get_file_path, read_argument};
 use database_connector::DatabaseConnector;
@@ -49,24 +49,61 @@ fn main() {
                 }
             }
 
-            match database_connector.read_all_weaknesses() {
-                Ok(weaknesses) => {
-                    let mut weak_rows: Vec<Vec<String>> = Vec::new();
-                    for weakness in weaknesses {
-                        weak_rows.push(weakness.to_table());
-                    }
+            // Add user interaction system:
+            // Print general "statistic" (Found vulnerabilities: 0 Low, 5 Medium, 2 High)
+            // Choose action:
+            // 1. List all vulnerabilities
+            // 2. List vulnerabilities by filter
+            // 3. List all weaknesses
+            // 4. List weaknesses by filter
+            // 5. Exit
 
-                    let _ = pretty_table::write_weaknesses_table(&mut weak_rows);
+            let id = "1"; // read from user input
+            match database_connector.get_vulnerability_by_id(id) {
+                Ok(vulnerability) => {
+                    let mut vuln_row: Vec<Vec<String>> = vec![vulnerability.to_table()];
+                    pretty_table::write_vulnerabilities_table(&mut vuln_row);
                 }
                 Err(e) => {
-                    println!("Failed to read database entries: {:?}", e)
+                    println!("Could not find vulnerability with id = ({}): {:?}", id, e)
                 }
             }
         }
         Err(error) => println!("{}", error),
     }
 
+    let severity = "Low";
+    match database_connector.get_vulnerability_by_severity(severity) {
+        Ok(vulnerabilities) => {
+            let mut vuln_rows = Vec::new();
+            for vulnerability in vulnerabilities {
+                vuln_rows.push(vulnerability.to_table());
+            }
+            // consider printing message if result is empty (instead of empty table)
+            pretty_table::write_vulnerabilities_table(&mut vuln_rows);
+        }
+        Err(e) => {
+            print!(
+                "Could not find vulnerability with severity = ({}): {:?}",
+                severity, e
+            )
+        }
+    }
 
+    let vuln_id = "2";
+    match database_connector.get_weaknesses_by_vulnerability_id(vuln_id) {
+        Ok(weaknesses) => {
+            let mut weakn_rows = Vec::new();
+            for weakness in weaknesses {
+                weakn_rows.push(weakness.to_table());
+            }
+            // consider printing message if result is empty (instead of empty table)
+            pretty_table::write_weaknesses_table(&mut weakn_rows);
+        }
+        Err(e) => {
+            println!("No weakness found with vulnerability_id = ({}): {:?}", vuln_id, e)
+        }
+    }
 
     println!("Analyzed file: {}", file_path);
 }

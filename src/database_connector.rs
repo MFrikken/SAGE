@@ -1,6 +1,6 @@
-use rusqlite::{Connection, Result, Error, params};
+use rusqlite::{params, Connection, Error, Result, Row};
 
-use crate::vulnerability::{Vulnerability, Weakness, Location, Severity};
+use crate::vulnerability::{Location, Severity, Vulnerability, Weakness};
 
 const DATABSE_SCHEMA: &str = include_str!("./resources/database/database.sql");
 
@@ -80,46 +80,102 @@ impl DatabaseConnector {
     }
 
     pub fn read_all_vulnerabilities(&self) -> Result<Vec<Vulnerability>, Error> {
-        let mut stmt = self.connection.prepare("SELECT * FROM vulnerabilities")?;
-        let vulnerabilities = stmt.query_map([], |row| {
-            Ok(Vulnerability {
-                id: row.get(0)?,
-                category: row.get(1)?,
-                name: row.get(2)?,
-                description: row.get(3)?,
-                cve: row.get(4)?,
-                severity: match row.get::<_, String>(5)?.as_str() {
-                    "Low" => Severity::Low,
-                    "Medium" => Severity::Medium,
-                    "High" => Severity::High,
-                    _ => Severity::Unknown,
-                },
-                location: Location {
-                    file: row.get(6)?,
-                    start_line: row.get(7)?,
-                    end_line: row.get(8)?,
-                },
-                weaknesses: Vec::new()
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(vulnerabilities)
+        self.find_all(
+            "SELECT * FROM vulnerabilities",
+            &[],
+            |row| Self::map_vulnerability(row)
+        )
     }
 
-    pub fn read_all_weaknesses(&self) -> Result<Vec<Weakness>, Error> {
-        let mut query = self.connection.prepare("SELECT * FROM weaknesses")?;
-        let weaknesses = query.query_map([], |row| {
-            Ok(Weakness {
-                id: row.get(0)?,
-                r#type: row.get(2)?,
-                name: row.get(3)?,
-                value: row.get(4)?,
-                url: row.get(5)?
-            })
-        })?
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(weaknesses)
+    pub fn get_all_weaknesses(&self) -> Result<Vec<Weakness>> {
+        self.find_all(
+            "SELECT * FROM weaknesses",
+            &[],
+            |row| Self::map_weakness(row)
+        )
     }
-}
+
+    pub fn get_vulnerability_by_id(&self, id: &str) -> Result<Vulnerability> {
+        self.find_one(
+            "SELECT * FROM vulnerabilities  WHERE id = ?1",
+            &[&id],
+            Self::map_vulnerability
+        )
+            
+        }
+
+        pub fn get_weakness_by_id(&self, id: &str) -> Result<Weakness> {
+            self.find_one(
+                "SELECT * FROM weaknesses WHERE id = ?1",
+                &[&id],
+                Self::map_weakness
+            )
+        }
+
+        pub fn get_weaknesses_by_vulnerability_id(&self, vulnerability_id: &str) -> Result<Vec<Weakness>> {
+            self.find_all(
+                "SELECT * FROM weaknesses WHERE vulnerability_id = ?1",
+                &[&vulnerability_id],
+                |row| Self::map_weakness(row)
+            )
+        }
+
+        pub fn get_vulnerability_by_severity(&self, severity: &str) -> Result<Vec<Vulnerability>> {
+    self.find_all(
+        "SELECT * FROM vulnerabilities WHERE severity = ?1",
+        &[&severity],
+        |row| Self::map_vulnerability(row)
+    )
+        }
+
+        
+        fn find_one<T, F>(&self, query: &str, params: &[&dyn rusqlite::ToSql], mapper: F) -> Result<T> 
+        where 
+        F: Fn(&Row) -> Result<T, Error>,
+        {
+            let mut stmt = self.connection.prepare(query)?;
+            stmt.query_row(params, mapper)
+        }
+
+        fn find_all<T, F>(&self, query: &str, params: &[&dyn rusqlite::ToSql], mapper: F) -> Result<Vec<T>>
+        where 
+            F: Fn(&Row) -> Result<T, Error>,
+            {
+                let mut stmt = self.connection.prepare(query)?;
+                let rows = stmt.query_map(params, mapper)?;
+                rows.collect::<Result<Vec<_>, _>>()
+            }
+
+            fn map_vulnerability(row: &Row) -> Result<Vulnerability, Error> {
+                Ok(Vulnerability {
+                    id: row.get(0)?,
+                    category: row.get(1)?,
+                    name: row.get(2)?,
+                    description: row.get(3)?,
+                    cve: row.get(4)?,
+                    severity: match row.get::<_, String>(5)?.as_str() {
+                        "Low" => Severity::Low,
+                        "Medium" => Severity::Medium,
+                        "High" => Severity::High,
+                        _ => Severity::Unknown
+                    },
+                    location: Location {
+                        file: row.get(6)?,
+                        start_line: row.get(7)?,
+                        end_line: row.get(8)?
+                    },
+                    weaknesses: Vec::new()
+                })
+            }
+
+            fn map_weakness(row: &Row) -> Result<Weakness, Error> {
+                Ok(Weakness {
+                    id: row.get(0)?,
+                    r#type: row.get(2)?,
+                    name: row.get(3)?,
+                    value: row.get(4)?,
+                    url: row.get(5)?
+                })
+            }
+        }
+
